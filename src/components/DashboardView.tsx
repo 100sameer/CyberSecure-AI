@@ -1,4 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer
+} from "recharts";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -11,16 +18,83 @@ import {
   Terminal,
   Clock,
   Lock,
-  Cpu
+  PieChart as PieChartIcon,
+  Shield
 } from "lucide-react";
 import { MOCK_INCIDENT_ALERTS } from "../data/mockData";
+import { ChatMessage, RiskLevel } from "../types";
 
 interface DashboardViewProps {
   onQuickQuery: (prompt: string) => void;
   chunkCount: number;
+  messages?: ChatMessage[];
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ onQuickQuery, chunkCount }) => {
+const RISK_COLORS: Record<RiskLevel, string> = {
+  CRITICAL: "#ef4444",
+  HIGH: "#f59e0b",
+  MEDIUM: "#6366f1",
+  LOW: "#10b981",
+  INFORMATIONAL: "#06b6d4"
+};
+
+const RISK_LABELS: Record<RiskLevel, string> = {
+  CRITICAL: "Critical",
+  HIGH: "High",
+  MEDIUM: "Medium",
+  LOW: "Low",
+  INFORMATIONAL: "Info"
+};
+
+export const DashboardView: React.FC<DashboardViewProps> = ({ onQuickQuery, chunkCount, messages = [] }) => {
+  const [activeSegment, setActiveSegment] = useState<string | null>(null);
+
+  // Compute Risk Level distribution dynamically from security queries in chat messages + baseline telemetry
+  const riskCounts: Record<RiskLevel, number> = {
+    CRITICAL: 2,
+    HIGH: 4,
+    MEDIUM: 3,
+    LOW: 2,
+    INFORMATIONAL: 1
+  };
+
+  messages.forEach((m) => {
+    if (m.analysis?.risk_level && riskCounts[m.analysis.risk_level] !== undefined) {
+      riskCounts[m.analysis.risk_level] += 1;
+    }
+  });
+
+  const pieData = (Object.keys(riskCounts) as RiskLevel[]).map((level) => ({
+    name: RISK_LABELS[level],
+    level,
+    value: riskCounts[level],
+    color: RISK_COLORS[level]
+  }));
+
+  const totalQueries = pieData.reduce((acc, curr) => acc + curr.value, 0);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const percentage = totalQueries > 0 ? ((data.value / totalQueries) * 100).toFixed(1) : "0";
+      return (
+        <div className="bg-slate-900/95 border border-white/10 p-3 rounded-2xl shadow-2xl backdrop-blur-xl text-xs space-y-1.5 z-50">
+          <div className="flex items-center gap-2 font-bold text-slate-100">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color }} />
+            <span>{data.name} Risk Level</span>
+          </div>
+          <div className="text-slate-300">
+            Evaluated Queries: <span className="font-bold text-white">{data.value}</span>
+          </div>
+          <div className="text-slate-400 text-[11px]">
+            Share of Total Threats: <span className="text-emerald-400 font-semibold">{percentage}%</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="space-y-6 pb-8">
       {/* Top Welcome Banner */}
@@ -107,6 +181,127 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onQuickQuery, chun
           </div>
           <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
             <div className="bg-amber-500 h-full w-[88%]" />
+          </div>
+        </div>
+      </div>
+
+      {/* Threat Overview Section (Recharts Dynamic Pie Chart) */}
+      <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-6 space-y-6 shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-500/20 border border-indigo-500/30 rounded-2xl text-indigo-400">
+              <PieChartIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
+                <span>Threat Overview</span>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-mono border border-indigo-500/30">
+                  {totalQueries} Evaluated Incidents
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Dynamic risk level distribution synthesized from active security queries and threat telemetry
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-slate-300 text-xs font-mono flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Real-Time RAG Telemetry</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* Recharts Pie Chart Container */}
+          <div className="lg:col-span-5 h-64 relative flex items-center justify-center bg-black/30 border border-white/5 rounded-2xl p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={4}
+                  dataKey="value"
+                  onMouseEnter={(_, index) => setActiveSegment(pieData[index].level)}
+                  onMouseLeave={() => setActiveSegment(null)}
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.color}
+                      stroke={activeSegment === entry.level ? "#ffffff" : "transparent"}
+                      strokeWidth={2}
+                      className="transition-all duration-300 cursor-pointer hover:opacity-90"
+                    />
+                  ))}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+
+            {/* Centered Donut Stat */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-2xl font-extrabold text-white font-mono">{totalQueries}</span>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                Total Queries
+              </span>
+            </div>
+          </div>
+
+          {/* Risk Level Badges & Breakdown List */}
+          <div className="lg:col-span-7 space-y-3">
+            <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Risk Severity Distribution</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {pieData.map((item) => {
+                const pct = totalQueries > 0 ? Math.round((item.value / totalQueries) * 100) : 0;
+                const isHovered = activeSegment === item.level;
+
+                return (
+                  <div
+                    key={item.level}
+                    onMouseEnter={() => setActiveSegment(item.level)}
+                    onMouseLeave={() => setActiveSegment(null)}
+                    className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+                      isHovered
+                        ? "bg-white/10 border-white/30 scale-[1.02]"
+                        : "bg-black/30 border-white/5 hover:border-white/20 hover:bg-black/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-xs font-bold text-slate-200">{item.name}</span>
+                      </div>
+                      <span className="text-xs font-extrabold font-mono text-slate-100">
+                        {item.value} <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: item.color
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -228,3 +423,4 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onQuickQuery, chun
     </div>
   );
 };
+

@@ -229,7 +229,7 @@ export default function App() {
 
         <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
           {activeTab === "dashboard" && (
-            <DashboardView onQuickQuery={handleQuickQuery} chunkCount={stats.total_chunks} />
+            <DashboardView onQuickQuery={handleQuickQuery} chunkCount={stats.total_chunks} messages={messages} />
           )}
 
           {activeTab === "chat" && (
