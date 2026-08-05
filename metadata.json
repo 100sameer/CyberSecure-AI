@@ -1,0 +1,6 @@
+{
+  "name": "CyberSecure AI",
+  "description": "Enterprise Multi-Agent Cyber Security Assistant for SOC analysts, vulnerability RAG, threat intel, and compliance reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
