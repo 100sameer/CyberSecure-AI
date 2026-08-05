@@ -1,0 +1,19 @@
+# Ignore Python backend and ML dependencies from Vercel Serverless Function builder
+requirements.txt
+*.py
+agents/
+graph/
+loaders/
+prompts/
+rag/
+schemas/
+tests/
+utils/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.chroma/
+chroma_db/
+Dockerfile
+docker-compose.yml
